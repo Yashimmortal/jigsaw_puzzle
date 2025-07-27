@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Jigsaw Puzzle Game</title>
+    <meta name="viewport" content="width=500, initial-scale=1">
+    <style>
+        body { background: #191a1c; color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; }
+        h1 { margin-top: 40px; font-size: 2.5em; }
+        #entry-box { margin-top:60px; }
+        #puzzle-area { margin-top:30px; }
+        #tray { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; min-height: 48px; margin: 10px auto; width: 268px;}
+        .piece { width: 42px; height: 42px; border: 1px solid #444; background: #fff; cursor: grab; }
+        #grid { display: grid; grid-template-columns: repeat(6, 42px); grid-gap: 2px; margin: 14px auto 0 auto; width: 268px;}
+        .cell { width: 42px; height: 42px; border: 1px dashed #555; background: #222; position: relative;}
+        #timer { font-size: 1.3em; margin: 12px; color: #ffec86; font-weight: bold;}
+        #thankyou { font-size: 1.6em; margin: 30px 0;}
+        .hidden { display: none; }
+        #start-btn, #submitbtn { padding:6px 22px; font-size:1.1em; margin:15px;}
+    </style>
+</head>
+<body>
+    <h1>🧩 Jigsaw Puzzle Game</h1>
+    <div id="entry-box">
+        <input id="playername" placeholder="Enter Your Name" style="padding:5px 15px;"/>
+        <button id="start-btn">Start Game</button>
+    </div>
+    <div id="game" class="hidden">
+        <div id="timer"></div>
+        <div id="puzzle-area">
+            <div id="tray"></div>
+            <div id="grid"></div>
+            <button id="submitbtn">Submit Puzzle</button>
+        </div>
+    </div>
+    <div id="thankyou" class="hidden"></div>
+    <script>
+    // --- CONFIG ---
+    const ROWS = 4, COLS = 6, TOTAL = 24;
+    const puzzleImages = [
+        "images/puzzle1.jpg",
+        "images/puzzle2.jpg",
+        "images/puzzle3.jpg"
+    ];
+    let currentPuzzle = 0, allArrangements = [], timerInterval, timeLeft;
+    const entryBox = document.getElementById("entry-box");
+    const gameBox = document.getElementById("game");
+    const trayDiv = document.getElementById("tray");
+    const gridDiv = document.getElementById("grid");
+    const timerDiv = document.getElementById("timer");
+    const submitBtn = document.getElementById("submitbtn");
+    const thankyouDiv = document.getElementById("thankyou");
+
+    document.getElementById("start-btn").onclick = function() {
+        let name = document.getElementById("playername").value.trim();
+        if(name.length < 2) { alert("Enter your name to begin!"); return; }
+        entryBox.classList.add("hidden");
+        gameBox.classList.remove("hidden");
+        thankyouDiv.className = "hidden";
+        currentPuzzle = 0;
+        allArrangements = [];
+        startPuzzle(currentPuzzle);
+    };
+
+    function startPuzzle(index) {
+        trayDiv.innerHTML = "";
+        gridDiv.innerHTML = "";
+        let correctOrder = [];
+        for(let i=1;i<=TOTAL;i++) correctOrder.push(i);
+        let tray = [...correctOrder];
+        for(let i=tray.length-1;i>0;i--) { let j=Math.floor(Math.random()*(i+1)); [tray[i],tray[j]]=[tray[j],tray[i]]; }
+        let imgSrc = puzzleImages[index % puzzleImages.length];
+
+        // Build tray (all pieces shuffled)
+        for(let i=0;i<TOTAL;i++) {
+            let piece = document.createElement("div");
+            piece.className = "piece";
+            piece.draggable = true;
+            piece.dataset.id = tray[i];
+            let n = tray[i]-1;
+            let row = Math.floor(n / COLS);
+            let col = n % COLS;
+            piece.style.background = `url('${imgSrc}') -${col*42}px -${row*42}px / 252px 168px`;
+            piece.ondragstart = e => { e.dataTransfer.setData("piece", piece.dataset.id); };
+            trayDiv.appendChild(piece);
+        }
+        // Build empty grid
+        for(let i=0;i<TOTAL;i++) {
+            let cell = document.createElement("div");
+            cell.className = "cell";
+            cell.ondragover = e => e.preventDefault();
+            cell.ondrop = function(e) {
+                e.preventDefault();
+                let pieceId = e.dataTransfer.getData("piece");
+                let dragged = document.querySelector(`.piece[data-id='${pieceId}']`);
+                if (dragged) cell.appendChild(dragged);
+            };
+            gridDiv.appendChild(cell);
+        }
+        // Allow moving pieces from grid BACK to tray
+        trayDiv.ondragover = e => e.preventDefault();
+        trayDiv.ondrop = function(e) {
+            e.preventDefault();
+            let pieceId = e.dataTransfer.getData("piece");
+            let dragged = document.querySelector(`.piece[data-id='${pieceId}']`);
+            if (dragged) trayDiv.appendChild(dragged);
+        };
+
+        // No image preview for the player
+
+        // Timer
+        timeLeft = 300;
+        updateTimer();
+        clearInterval(timerInterval);
+        timerInterval = setInterval(()=>{
+            timeLeft--;
+            updateTimer();
+            if(timeLeft<=0) { clearInterval(timerInterval); submitPuzzle(); }
+        }, 1000);
+    }
+    function updateTimer() {
+        let min = Math.floor(timeLeft/60).toString().padStart(2,'0');
+        let sec = (timeLeft%60).toString().padStart(2,'0');
+        timerDiv.textContent = `⏳ Time Left: ${min}:${sec}`;
+    }
+
+    submitBtn.onclick = submitPuzzle;
+
+    function submitPuzzle() {
+        clearInterval(timerInterval);
+        // Arrangement: [grid cell 0 contains pieceId..., ...]
+        let arrangement = [];
+        let cells = gridDiv.children;
+        for(let i=0;i<TOTAL;i++) {
+            let cell = cells[i];
+            let pid = (cell.childNodes.length>0) ? parseInt(cell.childNodes[0].dataset.id) : 0;
+            arrangement.push(pid);
+        }
+        allArrangements.push(arrangement);
+
+        // Next puzzle or submit all to backend
+        currentPuzzle++;
+        if(currentPuzzle < puzzleImages.length) {
+            startPuzzle(currentPuzzle);
+        } else {
+            let name = document.getElementById("playername").value.trim();
+            let puzzlesData = [];
+            for(let i=0;i<allArrangements.length;i++) {
+                let correctOrder = [];
+                for(let j=1;j<=TOTAL;j++) correctOrder.push(j);
+                puzzlesData.push({
+                    arrangement: allArrangements[i],
+                    correct: correctOrder
+                });
+            }
+            fetch('http://localhost:5000/submit', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    name: name,
+                    puzzles: puzzlesData
+                })
+            })
+            .then(res=>res.json()).then(data=>{
+                gameBox.className = "hidden";
+                thankyouDiv.className = "";
+                timerDiv.className = "hidden";
+                thankyouDiv.textContent = "🎉 Thank you for playing!";
+            })
+            .catch(()=>{alert("Submission failed!");});
+        }
+    }
+    </script>
+</body>
+</html>
