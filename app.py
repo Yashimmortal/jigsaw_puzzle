@@ -6,6 +6,10 @@ from datetime import datetime
 from flask_cors import CORS
 
 app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Backend is running! (Jigsaw API Server)"
 CORS(app)  # Allow requests from browser
 
 # --- GOOGLE SHEET SETUP ---
